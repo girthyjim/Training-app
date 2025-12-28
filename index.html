@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>Structural Hulk | Training Lab</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- React & Babel -->
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <style>
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .safe-top { padding-top: env(safe-area-inset-top); }
+        input[type=number]::-webkit-inner-spin-button, 
+        input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+        body { background-color: #050505; color: #f8fafc; }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useMemo } = React;
+        
+        // --- ASSETS: ICON COMPONENT (Inline SVGs for reliability) ---
+        const Icon = ({ name, size = 24, className = "" }) => {
+            const icons = {
+                ShieldCheck: <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10zM9 12l2 2 4-4" />,
+                Activity: <path d="M22 12h-4l-3 9L9 3l-3 9H2" />,
+                ChevronLeft: <path d="m15 18-6-6 6-6" />,
+                ChevronRight: <path d="m9 18 6-6-6-6" />,
+                Target: <React.Fragment><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></React.Fragment>,
+                Info: <React.Fragment><circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="16" y2="12"/><line x1="12" x2="12" y1="8" y2="8"/></React.Fragment>,
+                Save: <React.Fragment><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8" /></React.Fragment>
+            };
+
+            return (
+                <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width={size}
+                    height={size}
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    className={className}
+                >
+                    {icons[name] || null}
+                </svg>
+            );
+        };
+
+        // --- DATA SETTINGS ---
+        const USER_BENCHMARKS = {
+            benchPress1RM: 216,
+            squat1RM: 335,
+            deadlift1RM: 320,
+            dbRow10RM: 50,
+            legExtension10RM: 150,
+            calfRaise15RM: 260,
+            bicepCurl8RM: 95,
+            bodyWeight: 207,
+            age: 38
+        };
+
+        const PROGRAM_BLOCKS = [
+            { name: "Weeks 1-2: Base Building", tempo: "3-1-3", rir: 3, intensity: 0.70 },
+            { name: "Weeks 3-4: Hypertrophy & BFR", tempo: "2-0-2", rir: 2, intensity: 0.75 },
+            { name: "Weeks 5-6: Power & Contrast", tempo: "1-0-X", rir: 2, intensity: 0.80 },
+            { name: "Weeks 7-8: Sport Integration", tempo: "Sport", rir: 2, intensity: 0.70 },
+            { name: "Weeks 9-10: Volume Peak", tempo: "2-1-2", rir: 1, intensity: 0.78 },
+            { name: "Weeks 11-12: Peak & Deload", tempo: "1-0-1", rir: 3, intensity: 0.65 },
+        ];
+
+        const WEEKLY_SPLIT = [
+            { day: "Day 1", focus: "Chest & Bicep (Peak)", exercises: [
+                { name: "Bench Press", sets: 3, reps: "6-8", benchmark: "benchPress1RM", loadMod: 0.75, notes: "Touch and go." },
+                { name: "Bayesian Cable Curl", sets: 3, reps: "12-15", benchmark: "bicepCurl8RM", loadMod: 0.35, tags: ["ISO"], notes: "Extreme stretch." },
+                { name: "Incline DB Flys", sets: 3, reps: "10-12", benchmark: "benchPress1RM", loadMod: 0.25, notes: "Chest stretch focus." },
+                { name: "Spider Curls", sets: 3, reps: "10-12", benchmark: "bicepCurl8RM", loadMod: 0.40, tags: ["ISO"], notes: "Shoulder flexion focus." },
+                { name: "Cable Ext. Rotation", sets: 3, reps: "15", benchmark: "benchPress1RM", loadMod: 0.10, tags: ["STABILITY"], notes: "Elbow on knee." }
+            ]},
+            { day: "Day 2", focus: "Back & Traps", exercises: [
+                { name: "Weighted Pull-Ups", sets: 3, reps: "6-8", benchmark: "bodyWeight", loadMod: 0.15, notes: "Add weight to belt." },
+                { name: "Kelso Shrugs", sets: 4, reps: "12-15", benchmark: "dbRow10RM", loadMod: 1.0, tags: ["STABILITY"], notes: "Retract only." },
+                { name: "Dumbbell Rows", sets: 3, reps: "10", benchmark: "dbRow10RM", loadMod: 1.1, notes: "Pull to hip." },
+                { name: "Trap-3 Raises", sets: 4, reps: "8", benchmark: "benchPress1RM", loadMod: 0.10, tags: ["STABILITY"], notes: "45 deg incline." },
+                { name: "Dead Hangs", sets: 3, reps: "Max", benchmark: "bodyWeight", loadMod: 0, tags: ["GRIP"], notes: "Shoulders packed." }
+            ]},
+            { day: "Day 3", focus: "Legs & Calves", exercises: [
+                { name: "Back Squats", sets: 3, reps: "6-8", benchmark: "squat1RM", loadMod: 0.75, notes: "High bar." },
+                { name: "Sissy Squats", sets: 3, reps: "12-15", benchmark: "bodyWeight", loadMod: 0, tags: ["KNEE"], notes: "Stay vertical." },
+                { name: "Standing Calf Raise", sets: 4, reps: "15", benchmark: "calfRaise15RM", loadMod: 1.0, tags: ["PRIMARY"], notes: "3s pause at bottom." },
+                { name: "Leg Extensions", sets: 3, reps: "15", benchmark: "legExtension10RM", loadMod: 0.9, tags: ["BFR"], notes: "Short rest." },
+                { name: "Tibialis Raises", sets: 3, reps: "20", benchmark: "bodyWeight", loadMod: 0.20, tags: ["STABILITY"], notes: "Tib bar or wall." }
+            ]},
+            { day: "Day 4", focus: "Shoulders & Grip", exercises: [
+                { name: "Overhead Press", sets: 3, reps: "8-10", benchmark: "benchPress1RM", loadMod: 0.60, notes: "Full ROM." },
+                { name: "Powell Raises", sets: 3, reps: "10", benchmark: "benchPress1RM", loadMod: 0.10, tags: ["STABILITY"], notes: "Lying on side." },
+                { name: "Lateral Raises", sets: 4, reps: "15-20", benchmark: "benchPress1RM", loadMod: 0.12, notes: "Controlled eccentric." },
+                { name: "Wrist Curls", sets: 4, reps: "15", benchmark: "bicepCurl8RM", loadMod: 0.50, tags: ["GRIP", "BFR"], notes: "Roll into fingers." },
+                { name: "Reverse Curls", sets: 3, reps: "12", benchmark: "bicepCurl8RM", loadMod: 0.60, tags: ["GRIP"], notes: "Thumbless." }
+            ]},
+            { day: "Day 5", focus: "Hinge & Upper", exercises: [
+                { name: "Trap Bar Deadlift", sets: 3, reps: "5", benchmark: "deadlift1RM", loadMod: 0.85, notes: "Explosive intent." },
+                { name: "RDLs", sets: 3, reps: "10-12", benchmark: "deadlift1RM", loadMod: 0.60, notes: "Hamstring stretch." },
+                { name: "Dips", sets: 3, reps: "10-12", benchmark: "bodyWeight", loadMod: 0.10, notes: "Lean for chest." },
+                { name: "Face Pulls", sets: 4, reps: "20", benchmark: "dbRow10RM", loadMod: 0.6, tags: ["STABILITY"], notes: "External rotation." },
+                { name: "Plate Pinches", sets: 3, reps: "30s", benchmark: "bodyWeight", loadMod: 0.15, tags: ["GRIP"], notes: "Thumb engagement." }
+            ]},
+            { day: "Day 6", focus: "VMO & Core", exercises: [
+                { name: "ATG Split Squat", sets: 3, reps: "10", benchmark: "bodyWeight", loadMod: 0.20, tags: ["KNEE"], notes: "Cover calf." },
+                { name: "Seated GM", sets: 3, reps: "10", benchmark: "bodyWeight", loadMod: 0.30, notes: "Hip mobility." },
+                { name: "Hanging Leg Raise", sets: 4, reps: "15", benchmark: "bodyWeight", loadMod: 0, tags: ["CORE"], notes: "No swinging." },
+                { name: "McGill Side Plank", sets: 3, reps: "45s", benchmark: "bodyWeight", loadMod: 0, tags: ["CORE"], notes: "Stability focus." },
+                { name: "Seated Calf Raise", sets: 3, reps: "20", benchmark: "calfRaise15RM", loadMod: 0.6, notes: "Soleus focus." }
+            ]}
+        ];
+
+        function App() {
+            const [week, setWeek] = useState(1);
+            const [dayIndex, setDayIndex] = useState(0);
+            const [logs, setLogs] = useState({});
+
+            // Load initial logs on mount
+            useEffect(() => {
+                const saved = localStorage.getItem('structural_hulk_logs');
+                if (saved) {
+                    try {
+                        setLogs(JSON.parse(saved));
+                    } catch (e) {
+                        console.error("Failed to parse logs", e);
+                    }
+                }
+            }, []);
+
+            const currentBlock = useMemo(() => {
+                const bIdx = Math.min(Math.floor((week - 1) / 2), PROGRAM_BLOCKS.length - 1);
+                return PROGRAM_BLOCKS[bIdx];
+            }, [week]);
+
+            const currentDay = WEEKLY_SPLIT[dayIndex];
+
+            const handleWeightChange = (exerciseName, value) => {
+                const key = `w${week}-d${dayIndex}-${exerciseName}`;
+                setLogs(prev => {
+                    const next = { ...prev, [key]: value };
+                    localStorage.setItem('structural_hulk_logs', JSON.stringify(next));
+                    return next;
+                });
+            };
+
+            const getSuggestedWeight = (ex) => {
+                let base = USER_BENCHMARKS[ex.benchmark] || 45;
+                let weight = base * ex.loadMod * (currentBlock.intensity / 0.75);
+                return Math.round(weight / 2.5) * 2.5;
+            };
+
+            return (
+                <div className="min-h-screen bg-[#050505] text-slate-100 font-sans pb-28">
+                    <header className="bg-slate-900/40 backdrop-blur-xl border-b border-white/5 p-4 sticky top-0 z-40 safe-top">
+                        <div className="flex justify-between items-center">
+                            <div>
+                                <h1 className="text-lg font-black italic tracking-tighter flex items-center gap-2">
+                                    <Icon name="ShieldCheck" size={20} className="text-emerald-500" />
+                                    STRUCTURAL HULK
+                                </h1>
+                                <p className="text-[10px] font-bold text-slate-500 tracking-widest uppercase">
+                                    ESTIMATED WEIGHT: {USER_BENCHMARKS.bodyWeight} LBS
+                                </p>
+                            </div>
+                            <div className="p-2.5 bg-emerald-500/10 rounded-2xl border border-emerald-500/20">
+                                <Icon name="Activity" size={18} className="text-emerald-500" />
+                            </div>
+                        </div>
+
+                        <div className="flex items-center justify-between gap-4 mt-4 bg-white/5 p-1 rounded-2xl border border-white/5">
+                            <button onClick={() => setWeek(w => Math.max(1, w - 1))} className="p-2 rounded-xl active:bg-white/10 transition"><Icon name="ChevronLeft" size={16}/></button>
+                            <div className="text-center">
+                                <p className="text-[9px] font-black text-emerald-500 uppercase tracking-widest leading-none">{currentBlock.name}</p>
+                                <p className="text-sm font-black italic uppercase tracking-tight">Week {week}</p>
+                            </div>
+                            <button onClick={() => setWeek(w => Math.min(12, w + 1))} className="p-2 rounded-xl active:bg-white/10 transition"><Icon name="ChevronRight" size={16}/></button>
+                        </div>
+                    </header>
+
+                    <main className="p-4 max-w-md mx-auto">
+                        <div className="flex gap-2 mb-6 overflow-x-auto pb-2 no-scrollbar">
+                            {WEEKLY_SPLIT.map((d, idx) => (
+                                <button
+                                    key={idx}
+                                    onClick={() => setDayIndex(idx)}
+                                    className={`flex-shrink-0 px-5 py-2.5 rounded-2xl text-[10px] font-black transition-all ${
+                                        dayIndex === idx ? 'bg-white text-black shadow-xl shadow-white/10' : 'bg-slate-900 text-slate-500 border border-white/5'
+                                    }`}
+                                >
+                                    {d.day}
+                                </button>
+                            ))}
+                        </div>
+
+                        <div className="bg-gradient-to-br from-slate-900 to-black rounded-[32px] p-6 border border-white/5 mb-6 shadow-2xl relative overflow-hidden">
+                            <div className="absolute -top-10 -right-10 w-40 h-40 bg-emerald-500/10 blur-[60px]"></div>
+                            <div className="flex justify-between items-start relative z-10">
+                                <div>
+                                    <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Session Goal</p>
+                                    <h3 className="text-2xl font-black text-white italic uppercase tracking-tighter leading-tight">{currentDay.focus}</h3>
+                                </div>
+                                <div className="text-right">
+                                    <p className="text-[10px] font-black text-emerald-500 uppercase tracking-widest mb-1">Tempo/RIR</p>
+                                    <p className="text-base font-mono font-black">{currentBlock.tempo} / {currentBlock.rir}</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="space-y-4">
+                            {currentDay.exercises.map((ex, idx) => {
+                                const logKey = `w${week}-d${dayIndex}-${ex.name}`;
+                                const sugWeight = getSuggestedWeight(ex);
+                                return (
+                                    <div key={idx} className="bg-slate-900/50 rounded-[28px] border border-white/5 p-5 transition-all active:border-white/20">
+                                        <div className="flex justify-between items-start mb-4">
+                                            <div className="flex-1">
+                                                <h4 className="text-base font-black italic text-slate-100 uppercase tracking-tight">{ex.name}</h4>
+                                                <div className="flex flex-wrap gap-1 mt-1">
+                                                    {ex.tags?.map(t => <span key={t} className="text-[8px] bg-emerald-500/10 text-emerald-500 px-1.5 py-0.5 rounded-md font-black uppercase">{t}</span>)}
+                                                </div>
+                                            </div>
+                                            <Icon name="Target" size={16} className="text-slate-600" />
+                                        </div>
+
+                                        <div className="grid grid-cols-2 gap-3 mb-4">
+                                            <div className="bg-black/40 p-3 rounded-2xl border border-white/5">
+                                                <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1">Suggested</p>
+                                                <p className="text-lg font-mono font-black text-emerald-500/80">{sugWeight} <span className="text-[10px]">lbs</span></p>
+                                            </div>
+                                            <div className="bg-black p-3 rounded-2xl border-2 border-white/10 focus-within:border-emerald-500 transition-all">
+                                                <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1">Actual</p>
+                                                <input 
+                                                    type="number" 
+                                                    placeholder="0.0"
+                                                    value={logs[logKey] || ''} 
+                                                    onChange={(e) => handleWeightChange(ex.name, e.target.value)}
+                                                    className="w-full bg-transparent border-none p-0 focus:ring-0 text-lg font-mono font-black text-white"
+                                                />
+                                            </div>
+                                        </div>
+
+                                        <div className="bg-black/20 p-3 rounded-xl border border-white/5 flex items-start gap-3">
+                                            <Icon name="Info" size={12} className="text-emerald-500 mt-0.5 flex-shrink-0" />
+                                            <p className="text-[10px] text-slate-400 font-medium italic">{ex.notes}</p>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </main>
+
+                    <div className="fixed bottom-8 left-1/2 -translate-x-1/2 w-full max-w-md px-6 pointer-events-none">
+                        <button className="w-full bg-emerald-500 text-black font-black py-4 rounded-[24px] shadow-2xl shadow-emerald-500/40 pointer-events-auto flex items-center justify-center gap-2 active:scale-95 transition-transform uppercase tracking-tighter">
+                            <Icon name="Save" size={18}/>
+                            Complete Training Log
+                        </button>
+                    </div>
+                </div>
+            );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
